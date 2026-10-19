@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Days Clear</title>
+<style>
+  :root {
+    --bg: #f3efe6;
+    --card: #fbf9f4;
+    --ink: #2b2a27;
+    --muted: #7a766b;
+    --accent: #4a5d3f;
+    --accent-dark: #3a4a31;
+    --line: #ddd7c8;
+    --danger: #9b4a3c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1.5;
+  }
+  main { max-width: 480px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; font-weight: normal; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+  form {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 28px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    font: inherit;
+    color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  button.primary {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button.primary:hover { background: var(--accent-dark); }
+  .item {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .name { font-size: 17px; }
+  .since { color: var(--muted); font-size: 13px; }
+  .count { text-align: right; }
+  .days { font-size: 34px; color: var(--accent); line-height: 1; }
+  .unit { font-size: 12px; color: var(--muted); }
+  .remove {
+    background: none;
+    border: 0;
+    color: var(--danger);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 0 0;
+  }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Days Clear</h1>
+  <p class="sub">Track how long it has been since you quit.</p>
+
+  <form id="form">
+    <label for="what">What did you quit?</label>
+    <input id="what" type="text" placeholder="e.g. Smoking" required>
+    <label for="when">Quit date</label>
+    <input id="when" type="date" required>
+    <button class="primary" type="submit">Add</button>
+  </form>
+
+  <div id="list"></div>
+</main>
+
+<script>
+  const KEY = "quit-tracker-items";
+  const form = document.getElementById("form");
+  const list = document.getElementById("list");
+  const whenInput = document.getElementById("when");
+
+  let items = [];
+  try { items = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { items = []; }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (e) {}
+  }
+
+  // Parse YYYY-MM-DD as a local date to avoid timezone drift
+  function parseLocal(str) {
+    const [y, m, d] = str.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function todayLocal() {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+
+  function daysSince(str) {
+    const diff = todayLocal() - parseLocal(str);
+    return Math.max(0, Math.round(diff / 86400000));
+  }
+
+  function formatDate(str) {
+    return parseLocal(str).toLocaleDateString(undefined, {
+      year: "numeric", month: "short", day: "numeric"
+    });
+  }
+
+  function render() {
+    list.innerHTML = "";
+    if (items.length === 0) {
+      list.innerHTML = '<p class="empty">Nothing tracked yet.</p>';
+      return;
+    }
+    items.forEach((item, i) => {
+      const n = daysSince(item.date);
+      const el = document.createElement("div");
+      el.className = "item";
+
+      const left = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = item.name;
+      const since = document.createElement("div");
+      since.className = "since";
+      since.textContent = "Since " + formatDate(item.date);
+      const rm = document.createElement("button");
+      rm.className = "remove";
+      rm.textContent = "Remove";
+      rm.onclick = () => { items.splice(i, 1); save(); render(); };
+      left.append(name, since, rm);
+
+      const right = document.createElement("div");
+      right.className = "count";
+      const days = document.createElement("div");
+      days.className = "days";
+      days.textContent = n;
+      const unit = document.createElement("div");
+      unit.className = "unit";
+      unit.textContent = n === 1 ? "day" : "days";
+      right.append(days, unit);
+
+      el.append(left, right);
+      list.appendChild(el);
+    });
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = document.getElementById("what").value.trim();
+    const date = whenInput.value;
+    if (!name || !date) return;
+    items.push({ name, date });
+    save();
+    render();
+    form.reset();
+    setMax();
+  });
+
+  function setMax() {
+    const t = todayLocal();
+    const pad = (n) => String(n).padStart(2, "0");
+    whenInput.max = t.getFullYear() + "-" + pad(t.getMonth() + 1) + "-" + pad(t.getDate());
+  }
+
+  setMax();
+  render();
+</script>
+</body>
+</html>
